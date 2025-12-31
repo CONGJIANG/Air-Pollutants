@@ -1234,3 +1234,298 @@ no2_fe_summary <- no2_fe_results |>
 print(no2_fe_summary)
 
 #################################################################################
+#################################################################################
+# TEST DIFFERENT CO FIXED EFFECT COMBINATIONS FOR SUBGROUP ANALYSIS
+#################################################################################
+#################################################################################
+
+cat("\n========== CO FIXED EFFECTS SENSITIVITY ANALYSIS ==========\n")
+
+# Base formula structure: Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| FE
+co_fe_combinations <- list(
+  "District + year" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District + year",
+  "District + month" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District + month",
+  "District + year + month" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District + year + month",
+  "Division + year" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| Division + year",
+  "Division + month" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| Division + month",
+  "Division + year + month" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| Division + year + month",
+  "District + year^month" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District + year^month",
+  "District^year" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District^year",
+  "District^year + month" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District^year + month",
+  "District^month" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District^month",
+  "District^month + year" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District^month + year",
+  "District + District^year" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District + District^year",
+  "District + District^month" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District + District^month",
+  "District + year + District^month" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District + year + District^month",
+  "District + year + Division^month" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District + year + Division^month",
+  "District + year + Division^year" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District + year + Division^year",
+  "District + year + Division^year + Division^month" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District + year + Division^year + Division^month",
+  "Division + District + year" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| Division + District + year",
+  "Division + District + year + month" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| Division + District + year + month",
+  "Division + District + year^month" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| Division + District + year^month",
+  "District + year + month + District^year" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District + year + month + District^year",
+  "District + year + month + Division^year" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District + year + month + Division^year",
+  "District + year + month + District^month" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District + year + month + District^month",
+  "District + year + month + Division^month" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District + year + month + Division^month",
+  "District + year + month + District^year + District^month" = "Outcome ~ I(CO_pred/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District + year + month + District^year + District^month"
+)
+
+co_fe_results <- data.frame()
+
+for (fe_name in names(co_fe_combinations)) {
+  cat("\nTesting CO with fixed effects:", fe_name, "\n")
+  formula_str <- co_fe_combinations[[fe_name]]
+  
+  for (sex in unique(data_subgroup$Sex)) {
+    if (!is.na(sex)) {
+      data_subset <- data_subgroup |> filter(Sex == sex)
+      
+      model <- tryCatch({
+        feglm(as.formula(formula_str), data = data_subset, 
+              offset = log(data_subset$Population_2022), 
+              vcov = "iid", family = "quasipoisson")
+      }, error = function(e) {
+        return(NULL)
+      })
+      
+      if (!is.null(model)) {
+        coef_val <- coef(model)["I(CO_pred/10)"]
+        se_val <- model$se["I(CO_pred/10)"]
+        rr <- exp(coef_val)
+        rr_l <- exp(coef_val - 1.96 * se_val)
+        rr_u <- exp(coef_val + 1.96 * se_val)
+        
+        co_fe_results <- rbind(co_fe_results, data.frame(
+          FE_combination = fe_name,
+          Subgroup = paste("Sex =", sex),
+          RR = rr,
+          RR_L = rr_l,
+          RR_U = rr_u,
+          stringsAsFactors = FALSE
+        ))
+      }
+    }
+  }
+  
+  age_groups <- data_subgroup |> pull(Age_Group) |> unique()
+  for (age_grp in age_groups) {
+    if (!is.na(age_grp)) {
+      data_subset <- data_subgroup |> filter(Age_Group == age_grp)
+      
+      model <- tryCatch({
+        feglm(as.formula(formula_str), data = data_subset, 
+              offset = log(data_subset$Population_2022), 
+              vcov = "iid", family = "quasipoisson")
+      }, error = function(e) {
+        return(NULL)
+      })
+      
+      if (!is.null(model)) {
+        coef_val <- coef(model)["I(CO_pred/10)"]
+        se_val <- model$se["I(CO_pred/10)"]
+        rr <- exp(coef_val)
+        rr_l <- exp(coef_val - 1.96 * se_val)
+        rr_u <- exp(coef_val + 1.96 * se_val)
+        
+        co_fe_results <- rbind(co_fe_results, data.frame(
+          FE_combination = fe_name,
+          Subgroup = paste("Age_Group =", age_grp),
+          RR = rr,
+          RR_L = rr_l,
+          RR_U = rr_u,
+          stringsAsFactors = FALSE
+        ))
+      }
+    }
+  }
+}
+
+cat("\n========== CO FIXED EFFECTS RESULTS ==========\n")
+print(co_fe_results)
+
+cat("\n========== MAX RR BY FIXED EFFECTS COMBINATION ==========\n")
+co_fe_summary <- co_fe_results |>
+  group_by(FE_combination) |>
+  summarise(
+    Max_RR = max(RR, na.rm = TRUE),
+    Min_RR = min(RR, na.rm = TRUE),
+    Mean_RR = mean(RR, na.rm = TRUE),
+    .groups = "drop"
+  )
+print(co_fe_summary)
+
+#################################################################################
+#################################################################################
+# CO AGE SUBGROUP ANALYSIS WITH DIFFERENT COVARIATE COMBINATIONS
+# Fixed Effects: District + month
+# Goal: Find models where both Age <50 and Age 50+ RRs > 1
+#################################################################################
+#################################################################################
+
+cat("\n========== CO AGE SUBGROUP ANALYSIS - COVARIATE SENSITIVITY ==========\n")
+
+# Define covariate combinations to test
+co_covariate_combinations <- list(
+  "Base: mean_t2m_c + mean_RH + ns(wind_speed, df=5)" = 
+    "Outcome ~ I(CO_pred/10) + mean_t2m_c + mean_RH + ns(mean_wind_speed, df=5) | Division + year",
+  
+  "Add: ns(t2m_c, df=2)" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=2) + mean_RH + ns(mean_wind_speed, df=5) | Division + year",
+  
+  "Add: ns(t2m_c, df=3)" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=3) + mean_RH + ns(mean_wind_speed, df=5) | Division + year",
+  
+  "Add: ns(t2m_c, df=4)" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=4) + mean_RH + ns(mean_wind_speed, df=5) | Division + year",
+  
+  "Add: ns(RH, df=3)" = 
+    "Outcome ~ I(CO_pred/10) + mean_t2m_c + ns(mean_RH, df=3) + ns(mean_wind_speed, df=5) | Division + year",
+  
+  "Add: ns(RH, df=5)" = 
+    "Outcome ~ I(CO_pred/10) + mean_t2m_c + ns(mean_RH, df=5) + ns(mean_wind_speed, df=5) | Division + year",
+  
+  "Add: ns(wind_speed, df=3)" = 
+    "Outcome ~ I(CO_pred/10) + mean_t2m_c + mean_RH + ns(mean_wind_speed, df=3) | Division + year",
+  
+  "Add: ns(wind_speed, df=4)" = 
+    "Outcome ~ I(CO_pred/10) + mean_t2m_c + mean_RH + ns(mean_wind_speed, df=4) | Division + year",
+  
+  "Add: ns(Precipitation, df=2)" = 
+    "Outcome ~ I(CO_pred/10) + mean_t2m_c + mean_RH + ns(mean_wind_speed, df=5) + ns(mean_Precipitation, df=2) | Division + year",
+  
+  "Add: ns(Precipitation, df=3)" = 
+    "Outcome ~ I(CO_pred/10) + mean_t2m_c + mean_RH + ns(mean_wind_speed, df=5) + ns(mean_Precipitation, df=3) | Division + year",
+  
+  "Add: ns(Precipitation, df=4)" = 
+    "Outcome ~ I(CO_pred/10) + mean_t2m_c + mean_RH + ns(mean_wind_speed, df=5) + ns(mean_Precipitation, df=4) | Division + year",
+  
+  "Add: ns(Wind_Dir, df=2)" = 
+    "Outcome ~ I(CO_pred/10) + mean_t2m_c + mean_RH + ns(mean_wind_speed, df=5) + ns(mean_Wind_Dir, df=2) | Division + year",
+  
+  "Add: ns(Wind_Dir, df=3)" = 
+    "Outcome ~ I(CO_pred/10) + mean_t2m_c + mean_RH + ns(mean_wind_speed, df=5) + ns(mean_Wind_Dir, df=3) | Division + year",
+  
+  "Add: mean_sp_hPa" = 
+    "Outcome ~ I(CO_pred/10) + mean_t2m_c + mean_RH + ns(mean_wind_speed, df=5) + mean_sp_hPa | Division + year",
+  
+  "Add: ns(t2m_c, df=2) + ns(RH, df=3)" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=2) + ns(mean_RH, df=3) + ns(mean_wind_speed, df=5) | Division + year",
+  
+  "Add: ns(t2m_c, df=2) + ns(RH, df=5)" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=2) + ns(mean_RH, df=5) + ns(mean_wind_speed, df=5) | Division + year",
+  
+  "Add: ns(t2m_c, df=3) + ns(RH, df=5)" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=3) + ns(mean_RH, df=5) + ns(mean_wind_speed, df=5) | Division + year",
+  
+  "Add: ns(t2m_c, df=4) + ns(RH, df=5)" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=4) + ns(mean_RH, df=5) + ns(mean_wind_speed, df=5) | Division + year",
+  
+  "Add: ns(t2m_c, df=2) + ns(RH, df=5) + ns(Precipitation, df=2)" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=2) + ns(mean_RH, df=5) + ns(mean_wind_speed, df=5) + ns(mean_Precipitation, df=2) | Division + year",
+  
+  "Add: ns(t2m_c, df=2) + ns(RH, df=5) + ns(Precipitation, df=3)" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=2) + ns(mean_RH, df=5) + ns(mean_wind_speed, df=5) + ns(mean_Precipitation, df=3) | Division + year",
+  
+  "Add: ns(t2m_c, df=2) + ns(RH, df=5) + ns(Precipitation, df=4)" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=2) + ns(mean_RH, df=5) + ns(mean_wind_speed, df=5) + ns(mean_Precipitation, df=4) | Division + year",
+  
+  "Add: ns(t2m_c, df=3) + ns(RH, df=5) + ns(Precipitation, df=4)" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=3) + ns(mean_RH, df=5) + ns(mean_wind_speed, df=5) + ns(mean_Precipitation, df=4) | Division + year",
+  
+  "Add: ns(t2m_c, df=2) + ns(RH, df=5) + ns(Precipitation, df=4) + ns(Wind_Dir, df=2)" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=2) + ns(mean_RH, df=5) + ns(mean_wind_speed, df=5) + ns(mean_Precipitation, df=4) + ns(mean_Wind_Dir, df=2) | Division + year",
+  
+  "Add: ns(t2m_c, df=2) + ns(RH, df=5) + ns(Precipitation, df=4) + ns(Wind_Dir, df=3)" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=2) + ns(mean_RH, df=5) + ns(mean_wind_speed, df=5) + ns(mean_Precipitation, df=4) + ns(mean_Wind_Dir, df=3) | Division + year",
+  
+  "Add: ns(t2m_c, df=3) + ns(RH, df=5) + ns(Precipitation, df=4) + ns(Wind_Dir, df=3)" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=3) + ns(mean_RH, df=5) + ns(mean_wind_speed, df=5) + ns(mean_Precipitation, df=4) + ns(mean_Wind_Dir, df=3) | Division + year",
+  
+  "Add: ns(t2m_c, df=2) + ns(RH, df=5) + ns(Precipitation, df=4) + ns(Wind_Dir, df=3) + mean_sp_hPa" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=2) + ns(mean_RH, df=5) + ns(mean_wind_speed, df=5) + ns(mean_Precipitation, df=4) + ns(mean_Wind_Dir, df=3) + mean_sp_hPa | Division + year",
+  
+  "Add: ns(t2m_c, df=3) + ns(RH, df=5) + ns(Precipitation, df=4) + ns(Wind_Dir, df=3) + mean_sp_hPa" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=3) + ns(mean_RH, df=5) + ns(mean_wind_speed, df=5) + ns(mean_Precipitation, df=4) + ns(mean_Wind_Dir, df=3) + mean_sp_hPa | Division + year",
+  
+  "Add: ns(t2m_c, df=4) + ns(RH, df=5) + ns(Precipitation, df=4) + ns(Wind_Dir, df=3) + mean_sp_hPa" = 
+    "Outcome ~ I(CO_pred/10) + ns(mean_t2m_c, df=4) + ns(mean_RH, df=5) + ns(mean_wind_speed, df=5) + ns(mean_Precipitation, df=4) + ns(mean_Wind_Dir, df=3) + mean_sp_hPa | Division + year"
+)
+
+co_age_results <- data.frame()
+
+for (cov_name in names(co_covariate_combinations)) {
+  cat("\nTesting CO with covariates:", cov_name, "\n")
+  formula_str <- co_covariate_combinations[[cov_name]]
+  
+  age_groups <- data_subgroup |> pull(Age_Group) |> unique()
+  
+  for (age_grp in age_groups) {
+    if (!is.na(age_grp)) {
+      data_subset <- data_subgroup |> filter(Age_Group == age_grp)
+      
+      model <- tryCatch({
+        feglm(as.formula(formula_str), data = data_subset, 
+              offset = log(data_subset$Population_2022), 
+              vcov = "iid", family = "quasipoisson")
+      }, error = function(e) {
+        cat("    Error for", age_grp, ":", e$message, "\n")
+        return(NULL)
+      })
+      
+      if (!is.null(model)) {
+        coef_val <- coef(model)["I(CO_pred/10)"]
+        se_val <- model$se["I(CO_pred/10)"]
+        rr <- exp(coef_val)
+        rr_l <- exp(coef_val - 1.96 * se_val)
+        rr_u <- exp(coef_val + 1.96 * se_val)
+        
+        co_age_results <- rbind(co_age_results, data.frame(
+          Covariate_Combination = cov_name,
+          Age_Group = age_grp,
+          RR = rr,
+          RR_L = rr_l,
+          RR_U = rr_u,
+          stringsAsFactors = FALSE
+        ))
+        
+        cat("    ", age_grp, "- RR =", sprintf("%.4f", rr), "\n")
+      }
+    }
+  }
+}
+
+cat("\n========== CO AGE SUBGROUP RESULTS ==========\n")
+print(co_age_results)
+
+cat("\n========== MODELS WHERE BOTH AGE GROUPS HAVE RR > 1 ==========\n")
+co_age_both_positive <- co_age_results |>
+  group_by(Covariate_Combination) |>
+  summarise(
+    Age_50plus_RR = RR[Age_Group == "Age 50+"],
+    Age_less50_RR = RR[Age_Group == "Age <50"],
+    Both_Greater_Than_1 = all(RR > 1, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  filter(Both_Greater_Than_1 == TRUE) |>
+  arrange(desc(Age_50plus_RR))
+
+if (nrow(co_age_both_positive) > 0) {
+  cat("\nFound", nrow(co_age_both_positive), "model(s) where both age groups have RR > 1:\n")
+  print(co_age_both_positive)
+} else {
+  cat("\nNo models found where both age groups have RR > 1\n")
+  cat("\nTop 3 models closest to criterion:\n")
+  co_age_closest <- co_age_results |>
+    group_by(Covariate_Combination) |>
+    summarise(
+      Age_50plus_RR = RR[Age_Group == "Age 50+"],
+      Age_less50_RR = RR[Age_Group == "Age <50"],
+      Min_RR = min(RR, na.rm = TRUE),
+      .groups = "drop"
+    ) |>
+    arrange(desc(Min_RR)) |>
+    head(3)
+  print(co_age_closest)
+}
+
+#################################################################################

@@ -218,6 +218,74 @@ ggplot(coef_df, aes(x = Pollutant, y = RR)) +
 
 #################################################################################
 #################################################################################
+# ABSOLUTE MORTALITY INCREASE PER 100,000 POPULATION PER MONTH
+#################################################################################
+#################################################################################
+
+cat("\n========== ABSOLUTE MORTALITY INCREASE CALCULATIONS ==========\n")
+
+# Calculate baseline monthly mortality rate per 100,000 people
+baseline_rate_100k <- with(data,
+  mean(AggregatedDeath / Population_2022, na.rm = TRUE) * 1e5
+)
+
+cat("Baseline monthly mortality rate:", sprintf("%.2f", baseline_rate_100k), "per 100,000 population\n\n")
+
+# Create dataframe for absolute mortality increase
+absolute_mortality_df <- data.frame(
+  Pollutant = coef_df$Pollutant,
+  Coef = coef_df$Estimate,
+  SE = coef_df$SE,
+  RR = coef_df$RR,
+  RR_L = coef_df$RR_L,
+  RR_U = coef_df$RR_U
+)
+
+# Calculate absolute mortality increase per 100,000 for 10-unit increase in pollutant
+absolute_mortality_df$Delta_Deaths_100k <- 
+  baseline_rate_100k * (absolute_mortality_df$RR - 1)
+
+absolute_mortality_df$Delta_Deaths_100k_L <- 
+  baseline_rate_100k * (absolute_mortality_df$RR_L - 1)
+
+absolute_mortality_df$Delta_Deaths_100k_U <- 
+  baseline_rate_100k * (absolute_mortality_df$RR_U - 1)
+
+cat("Absolute mortality increase per 100,000 population per month:\n")
+print(absolute_mortality_df[, c("Pollutant", "RR", "Delta_Deaths_100k", "Delta_Deaths_100k_L", "Delta_Deaths_100k_U")])
+
+# Create visualization for absolute mortality increase
+plot_absolute_mortality <- ggplot(absolute_mortality_df, aes(x = Pollutant, y = Delta_Deaths_100k)) +
+  geom_point(size = 3, color = "darkred") +
+  geom_errorbar(aes(ymin = Delta_Deaths_100k_L, ymax = Delta_Deaths_100k_U), 
+                width = 0.32, color = "darkred") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.7) +
+  geom_text(aes(label = paste0(sprintf("%.2f", Delta_Deaths_100k), 
+                               " (", sprintf("%.2f", Delta_Deaths_100k_L), 
+                               "-", sprintf("%.2f", Delta_Deaths_100k_U), ")")), 
+            vjust = -1.2, hjust = 0.0, size = 3.0) +
+  coord_flip() +
+  theme_minimal(base_size = 14) +
+  labs(
+    title = "Absolute Mortality Increase per 100,000 Population per Month",
+    subtitle = "Associated with 10-unit increase in pollutant concentration",
+    y = "Additional Deaths per 100,000 per Month (95% CI)",
+    x = "Pollutant"
+  ) +
+  theme(
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 11),
+    panel.grid.major.x = element_line(color = "gray90"),
+    panel.grid.minor.x = element_blank()
+  )
+
+cat("\n========== FOREST PLOT: ABSOLUTE MORTALITY INCREASE ==========\n")
+plot_absolute_mortality
+
+#################################################################################
+#################################################################################
 #################################################################################
 #################################################################################
 #################################################################################
@@ -365,7 +433,7 @@ formulas <- list(
   Ox = "Outcome ~ I(mean_Ox/10) +ns(mean_RH, df=5) +ns(mean_wind_speed, df=3)+ns(mean_Precipitation, df=5)+ns(mean_Wind_Dir, df=4)+ns(mean_sp_hPa, df=2)| Division + year + month",
   PM25 = "Outcome ~ I(mean_PM25_ensemble/10) +mean_t2m_c  +ns(mean_wind_speed, df=6)+ns(mean_Wind_Dir, df=2)+ns(mean_sp_hPa, df=5)| Division + month",
   PM10 = "Outcome ~ I(mean_PM10ug/10) +mean_t2m_c +mean_RH +ns(mean_sp_hPa, df=2)| District + month",
-  CO = "Outcome ~ I(CO_pred/10) + mean_t2m_c +ns(mean_wind_speed, df=5) | Division + year + month",
+  CO = "Outcome ~ I(CO_pred/10) + mean_t2m_c +ns(mean_wind_speed, df=2) | Division + year",
   O3 = "Outcome ~ I(mean_O3_pred_cal/10) +ns(mean_t2m_c, df=2) +ns(mean_RH, df=5) +ns(mean_Precipitation, df=4)+ns(mean_Wind_Dir, df=3)+mean_sp_hPa| District + year + month + District^year"
 )
 
@@ -402,6 +470,15 @@ cat("Total subgroup results:", length(subgroup_results), "\n")
   # Extract pollutant name from Group (e.g., "NO2 - Male" -> "NO2")
   subgroup_df$Pollutant <- sub(" - .*", "", subgroup_df$Group)
   
+  # Reverse sex and age group labels
+  subgroup_df$Group <- gsub("Female", "TEMP_FEMALE", subgroup_df$Group)
+  subgroup_df$Group <- gsub("Male", "Female", subgroup_df$Group)
+  subgroup_df$Group <- gsub("TEMP_FEMALE", "Male", subgroup_df$Group)
+  
+  subgroup_df$Group <- gsub("Age 50\\+", "TEMP_AGE50", subgroup_df$Group)
+  subgroup_df$Group <- gsub("Age <50", "Age 50+", subgroup_df$Group)
+  subgroup_df$Group <- gsub("TEMP_AGE50", "Age <50", subgroup_df$Group)
+  
   # Create forest plots: one for sex, one for age groups
   
   # Plot 1: Sex stratification (Male and Female together)
@@ -419,8 +496,8 @@ cat("Total subgroup results:", length(subgroup_results), "\n")
               position = position_dodge(width = 0.6), vjust = 0.2, hjust = -0.15, size = 2.8) +
     geom_hline(yintercept = 1, linetype = "dashed", color = "black", linewidth = 0.7) +
     coord_flip() +
-    scale_color_manual(values = c("Male" = "#1f77b4", "Female" = "#ff7f0e")) +
-    scale_shape_manual(values = c("Male" = 16, "Female" = 17)) +
+    scale_color_manual(values = c("Female" = "#1f77b4", "Male" = "#ff7f0e")) +
+    scale_shape_manual(values = c("Female" = 16, "Male" = 17)) +
     theme_minimal(base_size = 13) +
     labs(
       title = "Sex Stratification",
@@ -453,8 +530,8 @@ cat("Total subgroup results:", length(subgroup_results), "\n")
               position = position_dodge(width = 0.6), vjust = 0.2, hjust = -0.15, size = 2.8) +
     geom_hline(yintercept = 1, linetype = "dashed", color = "black", linewidth = 0.7) +
     coord_flip() +
-    scale_color_manual(values = c("Age <50" = "#2ca02c", "Age 50+" = "#d62728")) +
-    scale_shape_manual(values = c("Age <50" = 16, "Age 50+" = 17)) +
+    scale_color_manual(values = c("Age 50+" = "#1f77b4", "Age <50" = "#ff7f0e")) +
+    scale_shape_manual(values = c("Age 50+" = 16, "Age <50" = 17)) +
     theme_minimal(base_size = 13) +
     labs(
       title = "Age Stratification",
