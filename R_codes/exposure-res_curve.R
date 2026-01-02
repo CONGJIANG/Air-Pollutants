@@ -118,7 +118,7 @@ create_er_curve <- function(model, pollutant_var, pollutant_name, pollutant_unit
     labs(
       x = paste0(pollutant_name, " (", pollutant_unit, ")"),
       y = "Risk Ratio for Death",
-      title = paste("Mortality RR vs.", pollutant_name, paste0("(", functional_form, ")"))
+      title = paste("RR vs.", pollutant_name, paste0("(", functional_form, ")"))
     ) +
     theme_minimal(base_size = 12) +
     theme(
@@ -345,7 +345,7 @@ PM25_DRS2
 combined_PM25_plot <- (PM25_DRS + PM25_DRS1 + PM25_DRS2) +
   plot_annotation(
     title = "PM2.5 Exposure-Response Curves: Comparison of Functional Forms",
-    subtitle = "Linear, Quadratic, and Spline Models",
+    subtitle = "Linear (left), Quadratic (middle), and Spline Models (right)",
     theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
                   plot.subtitle = element_text(size = 12, hjust = 0.5))
   )

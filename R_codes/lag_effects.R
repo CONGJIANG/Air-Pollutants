@@ -1075,8 +1075,8 @@ plot_lag_O3 <- all_lag_results |>
 # Combine all lag plots (2x4 grid)
 library(patchwork)
 
-combined_lag_plot <- (plot_lag_NO2 + plot_lag_NO + plot_lag_Ox + plot_lag_SO2) / 
-                     (plot_lag_PM25 + plot_lag_PM10 + plot_lag_CO + plot_lag_O3) +
+combined_lag_plot <- (plot_lag_PM25 + plot_lag_PM10 + plot_lag_NO2 + plot_lag_NO) / 
+                     (plot_lag_Ox + plot_lag_SO2 + plot_lag_CO + plot_lag_O3) +
   plot_annotation(
     title = "Lag Effects of Air Pollutants on Mortality",
     theme = theme(plot.title = element_text(size = 14, face = "bold"),
@@ -1207,8 +1207,8 @@ plot_abs_lag_O3 <- absolute_lag_results |>
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 # Combine all absolute lag plots (2x4 grid)
-combined_abs_lag_plot <- (plot_abs_lag_NO2 + plot_abs_lag_NO + plot_abs_lag_Ox + plot_abs_lag_SO2) / 
-                         (plot_abs_lag_PM25 + plot_abs_lag_PM10 + plot_abs_lag_CO + plot_abs_lag_O3) +
+combined_abs_lag_plot <- (plot_abs_lag_PM25 + plot_abs_lag_PM10 + plot_abs_lag_NO2 + plot_abs_lag_NO) / 
+                         (plot_abs_lag_Ox + plot_abs_lag_SO2 + plot_abs_lag_CO + plot_abs_lag_O3) +
   plot_annotation(
     title = "Absolute Mortality Increase (per 100,000 population per month) - Lag Effects",
     subtitle = "Associated with 10-unit increase in pollutant concentration",

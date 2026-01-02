@@ -218,6 +218,74 @@ ggplot(coef_df, aes(x = Pollutant, y = RR)) +
 
 #################################################################################
 #################################################################################
+# ABSOLUTE MORTALITY INCREASE PER 100,000 POPULATION PER MONTH
+#################################################################################
+#################################################################################
+
+cat("\n========== ABSOLUTE MORTALITY INCREASE CALCULATIONS ==========\n")
+
+# Calculate baseline monthly mortality rate per 100,000 people
+baseline_rate_100k <- with(data,
+  mean(AggregatedDeath / Population_2022, na.rm = TRUE) * 1e5
+)
+
+cat("Baseline monthly mortality rate:", sprintf("%.2f", baseline_rate_100k), "per 100,000 population\n\n")
+
+# Create dataframe for absolute mortality increase
+absolute_mortality_df <- data.frame(
+  Pollutant = coef_df$Pollutant,
+  Coef = coef_df$Estimate,
+  SE = coef_df$SE,
+  RR = coef_df$RR,
+  RR_L = coef_df$RR_L,
+  RR_U = coef_df$RR_U
+)
+
+# Calculate absolute mortality increase per 100,000 for 10-unit increase in pollutant
+absolute_mortality_df$Delta_Deaths_100k <- 
+  baseline_rate_100k * (absolute_mortality_df$RR - 1)
+
+absolute_mortality_df$Delta_Deaths_100k_L <- 
+  baseline_rate_100k * (absolute_mortality_df$RR_L - 1)
+
+absolute_mortality_df$Delta_Deaths_100k_U <- 
+  baseline_rate_100k * (absolute_mortality_df$RR_U - 1)
+
+cat("Absolute mortality increase per 100,000 population per month:\n")
+print(absolute_mortality_df[, c("Pollutant", "RR", "Delta_Deaths_100k", "Delta_Deaths_100k_L", "Delta_Deaths_100k_U")])
+
+# Create visualization for absolute mortality increase
+plot_absolute_mortality <- ggplot(absolute_mortality_df, aes(x = Pollutant, y = Delta_Deaths_100k)) +
+  geom_point(size = 3, color = "darkred") +
+  geom_errorbar(aes(ymin = Delta_Deaths_100k_L, ymax = Delta_Deaths_100k_U), 
+                width = 0.32, color = "darkred") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.7) +
+  geom_text(aes(label = paste0(sprintf("%.2f", Delta_Deaths_100k), 
+                               " (", sprintf("%.2f", Delta_Deaths_100k_L), 
+                               "-", sprintf("%.2f", Delta_Deaths_100k_U), ")")), 
+            vjust = -1.2, hjust = 0.0, size = 3.0) +
+  coord_flip() +
+  theme_minimal(base_size = 14) +
+  labs(
+    title = "Absolute Mortality Increase per 100,000 Population per Month",
+    subtitle = "Associated with 10-unit increase in pollutant concentration",
+    y = "Additional Deaths per 100,000 per Month (95% CI)",
+    x = "Pollutant"
+  ) +
+  theme(
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 11),
+    panel.grid.major.x = element_line(color = "gray90"),
+    panel.grid.minor.x = element_blank()
+  )
+
+cat("\n========== FOREST PLOT: ABSOLUTE MORTALITY INCREASE ==========\n")
+plot_absolute_mortality
+
+#################################################################################
+#################################################################################
 #################################################################################
 #################################################################################
 #################################################################################
@@ -227,64 +295,51 @@ ggplot(coef_df, aes(x = Pollutant, y = RR)) +
 # Load original data with sex and age information
 data_full <- read_excel("/Users/cjiang/Downloads/Aggregated data for mortality.xlsx")
 
-# Create age-stratified aggregate deaths
-data_full <- data_full |>
+# Prepare exposure data: aggregate by month/year (same exposure for all sex/age groups in same month)
+exposure_data <- data |>
+  select(year, month, District,
+         mean_NO2_ensemble, mean_NOppb, mean_SO2_ensemble, mean_Ox, mean_PM25_ensemble, 
+         mean_PM10ug, mean_CO_pred, CO_pred, mean_O3_pred_cal, 
+         mean_t2m_c, mean_RH, mean_Precipitation, mean_wind_speed, 
+         mean_Wind_Dir, mean_sp_hPa, Population_2022) |>
+  distinct()
+exposure_data$mean_NOug <- exposure_data$mean_NOppb * 1.23  # Convert ppb to μg/m³
+# Prepare mortality data: pivot to long format with age groups
+data_subgroup <- data_full |>
   mutate(
     year = Year,
     month = Month,
-    # Deaths in Age <50 = Age0to5 + Age6to14 + Age15to49
-    Deaths_Age_lt50 = Age0to5 + Age6to14 + Age15to49,
-    Deaths_Age_50plus = `Age50+`,
-    .keep = "unused"
-  )
-
-# Aggregate environmental data from RDS by district, year, month, sex, and create separate records for age groups
-data_subgroup <- expand.grid(
-  year = unique(data$year),
-  month = unique(data$month),
-  District = unique(data$District),
-  Sex = c("Male", "Female"),
-  Age_Group = c("Age <50", "Age 50+")
-) |>
-  # Merge environmental data (keep at district level)
-  left_join(
-    data |>
-      select(year, month, District, Division, AggregatedDeath, mean_NO2_ensemble, mean_NOppb, 
-             mean_SO2_ensemble, mean_Ox, mean_PM25_ensemble, mean_PM10ug, mean_CO_pred, CO_pred,
-             mean_O3_pred_cal, mean_t2m_c, mean_RH, mean_Precipitation, mean_wind_speed, 
-             mean_Wind_Dir, mean_sp_hPa, Population_2022),
-    by = c("year", "month", "District"),
-    relationship = "many-to-many"
+    District = Distirct  # Fix typo in Excel column name
   ) |>
-  # Merge outcome data (sex/age-stratified from Excel at division level)
-  left_join(
-    data_full |>
-      select(year, month, Division, Sex, Deaths_Age_lt50, Deaths_Age_50plus) |>
-      pivot_longer(
-        cols = c(Deaths_Age_lt50, Deaths_Age_50plus),
-        names_to = "Age_Group_Type",
-        values_to = "Stratified_Deaths"
-      ) |>
-      mutate(
-        Age_Group = ifelse(Age_Group_Type == "Deaths_Age_lt50", "Age <50", "Age 50+")
-      ) |>
-      select(year, month, Division, Sex, Age_Group, Stratified_Deaths),
-    by = c("year", "month", "Division", "Sex", "Age_Group"),
-    relationship = "many-to-many"
+  select(year, month, District, Division, Sex, Age0to5, Age6to14, Age15to49, `Age50+`) |>
+  pivot_longer(
+    cols = c(Age0to5, Age6to14, Age15to49, `Age50+`),
+    names_to = "Age_Category",
+    values_to = "Deaths"
   ) |>
-  # For stratified analysis, use stratified deaths as outcome
   mutate(
-    Deaths_to_use = Stratified_Deaths,
-    Outcome = ifelse(is.na(Deaths_to_use), AggregatedDeath, Deaths_to_use)
+    Age_Group = case_when(
+      Age_Category %in% c("Age0to5", "Age6to14", "Age15to49") ~ "Age <50",
+      Age_Category == "Age50+" ~ "Age 50+",
+      TRUE ~ NA_character_
+    )
   ) |>
-  filter(!is.na(Sex), !is.na(Age_Group), !is.na(District))
+  select(year, month, District, Division, Sex, Age_Group, Deaths) |>
+  group_by(year, month, District, Division, Sex, Age_Group) |>
+  summarise(Outcome = sum(Deaths, na.rm = TRUE), .groups = "drop") |>
+  # Merge with exposure data by month/year/district
+  left_join(
+    exposure_data,
+    by = c("year", "month", "District")
+  ) |>
+  filter(!is.na(Sex), !is.na(Age_Group), !is.na(District), !is.na(Outcome), 
+         !is.na(Population_2022), !is.na(mean_NO2_ensemble))
 
-cat("Data subgroup created with", nrow(data_subgroup), "rows\n")
+cat("Data subgroup created with", nrow(data_subgroup), "rows (after removing districts without RDS data)\n")
 cat("Unique sex values:", unique(data_subgroup$Sex), "\n")
 cat("Unique age groups:", unique(data_subgroup$Age_Group), "\n")
 cat("Sample rows:\n")
-print(head(data_subgroup[, c("year", "month", "Division", "Sex", "Age_Group", "Outcome", "mean_NO2_ensemble")], 10))
-data_subgroup$mean_CO_pred
+print(head(data_subgroup[, c("year", "month", "District", "Sex", "Age_Group", "Outcome", "mean_NO2_ensemble")], 10))
 # Function to fit subgroup models
 fit_subgroup_models <- function(formula_str, data, pollutant_name, divisor = 10) {
   results <- list()
@@ -372,14 +427,14 @@ fit_subgroup_models <- function(formula_str, data, pollutant_name, divisor = 10)
 }
 
 formulas <- list(
-  NO2 = "Outcome ~ I(mean_NO2_ensemble/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District^month",
-  NO = "Outcome ~ I(mean_NOppb*1.23/10) +ns(mean_t2m_c, df=4) +mean_RH +mean_wind_speed| District + month",
-  SO2 = "Outcome ~ I(mean_SO2_ensemble/10) +ns(mean_t2m_c, df=2) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District^month + year",
+  NO2 = "Outcome ~ I(mean_NO2_ensemble/10) +ns(mean_t2m_c, df=4) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| Division + month",
+  NO = "Outcome ~ I(mean_NOug/10) +ns(mean_t2m_c, df=4) +mean_RH +mean_wind_speed| Division + month",
+  SO2 = "Outcome ~ I(mean_SO2_ensemble/10) +ns(mean_t2m_c, df=2) +ns(mean_RH, df=5)+ns(mean_Precipitation, df=2)| District^month",
   Ox = "Outcome ~ I(mean_Ox/10) +ns(mean_RH, df=5) +ns(mean_wind_speed, df=3)+ns(mean_Precipitation, df=5)+ns(mean_Wind_Dir, df=4)+ns(mean_sp_hPa, df=2)| Division + year + month",
-  PM25 = "Outcome ~ I(mean_PM25_ensemble/10) +mean_t2m_c  +ns(mean_wind_speed, df=6)+ns(mean_Wind_Dir, df=2)+ns(mean_sp_hPa, df=5)| District^month + year",
+  PM25 = "Outcome ~ I(mean_PM25_ensemble/10) +mean_t2m_c  +ns(mean_wind_speed, df=6)+ns(mean_Wind_Dir, df=2)+ns(mean_sp_hPa, df=5)| Division + month",
   PM10 = "Outcome ~ I(mean_PM10ug/10) +mean_t2m_c +mean_RH +ns(mean_sp_hPa, df=2)| District + month",
-  CO = "Outcome ~ I(CO_pred/10) + mean_t2m_c +ns(mean_wind_speed, df=5) | District^year + month",
-  O3 = "Outcome ~ I(mean_O3_pred_cal/10) +ns(mean_t2m_c, df=2) +ns(mean_RH, df=5) +ns(mean_Precipitation, df=4)+ns(mean_Wind_Dir, df=3)+mean_sp_hPa| District^year+month"
+  CO = "Outcome ~ I(CO_pred/10) + mean_t2m_c +ns(mean_wind_speed, df=2) | Division + year",
+  O3 = "Outcome ~ I(mean_O3_pred_cal/10) +ns(mean_t2m_c, df=2) +ns(mean_RH, df=5) +ns(mean_Precipitation, df=4)+ns(mean_Wind_Dir, df=3)+mean_sp_hPa| District + year + month + District^year"
 )
 
 # Fit subgroup models for each pollutant using merged data
@@ -415,6 +470,15 @@ cat("Total subgroup results:", length(subgroup_results), "\n")
   # Extract pollutant name from Group (e.g., "NO2 - Male" -> "NO2")
   subgroup_df$Pollutant <- sub(" - .*", "", subgroup_df$Group)
   
+  # Reverse sex and age group labels
+  subgroup_df$Group <- gsub("Female", "TEMP_FEMALE", subgroup_df$Group)
+  subgroup_df$Group <- gsub("Male", "Female", subgroup_df$Group)
+  subgroup_df$Group <- gsub("TEMP_FEMALE", "Male", subgroup_df$Group)
+  
+  subgroup_df$Group <- gsub("Age 50\\+", "TEMP_AGE50", subgroup_df$Group)
+  subgroup_df$Group <- gsub("Age <50", "Age 50+", subgroup_df$Group)
+  subgroup_df$Group <- gsub("TEMP_AGE50", "Age <50", subgroup_df$Group)
+  
   # Create forest plots: one for sex, one for age groups
   
   # Plot 1: Sex stratification (Male and Female together)
@@ -426,16 +490,18 @@ cat("Total subgroup results:", length(subgroup_results), "\n")
     )
   
   plot_sex <- ggplot(sex_data, aes(x = Pollutant, y = RR, color = Sex, shape = Sex)) +
-    geom_point(size = 3, position = position_dodge(width = 0.3)) +
-    geom_errorbar(aes(ymin = RR_L, ymax = RR_U), width = 0.2, position = position_dodge(width = 0.3)) +
+    geom_point(size = 3, position = position_dodge(width = 0.6)) +
+    geom_errorbar(aes(ymin = RR_L, ymax = RR_U), width = 0.2, position = position_dodge(width = 0.6)) +
+    geom_text(aes(label = paste0(sprintf("%.3f", RR), " (", sprintf("%.3f", RR_L), "-", sprintf("%.3f", RR_U), ")")), 
+              position = position_dodge(width = 0.6), vjust = 0.2, hjust = -0.15, size = 2.8) +
     geom_hline(yintercept = 1, linetype = "dashed", color = "black", linewidth = 0.7) +
     coord_flip() +
-    scale_color_manual(values = c("Male" = "#1f77b4", "Female" = "#ff7f0e")) +
-    scale_shape_manual(values = c("Male" = 16, "Female" = 17)) +
+    scale_color_manual(values = c("Female" = "#1f77b4", "Male" = "#ff7f0e")) +
+    scale_shape_manual(values = c("Female" = 16, "Male" = 17)) +
     theme_minimal(base_size = 13) +
     labs(
       title = "Sex Stratification",
-      y = "Risk Ratio (95% CI) for Death per 10-unit Increase",
+      y = "Risk Ratio (95% CI) for Death",
       x = "Pollutant",
       color = "Sex",
       shape = "Sex"
@@ -458,16 +524,18 @@ cat("Total subgroup results:", length(subgroup_results), "\n")
     )
   
   plot_age <- ggplot(age_data, aes(x = Pollutant, y = RR, color = Age, shape = Age)) +
-    geom_point(size = 3, position = position_dodge(width = 0.3)) +
-    geom_errorbar(aes(ymin = RR_L, ymax = RR_U), width = 0.2, position = position_dodge(width = 0.3)) +
+    geom_point(size = 3, position = position_dodge(width = 0.6)) +
+    geom_errorbar(aes(ymin = RR_L, ymax = RR_U), width = 0.2, position = position_dodge(width = 0.6)) +
+    geom_text(aes(label = paste0(sprintf("%.3f", RR), " (", sprintf("%.3f", RR_L), "-", sprintf("%.3f", RR_U), ")")), 
+              position = position_dodge(width = 0.6), vjust = 0.2, hjust = -0.15, size = 2.8) +
     geom_hline(yintercept = 1, linetype = "dashed", color = "black", linewidth = 0.7) +
     coord_flip() +
-    scale_color_manual(values = c("Age <50" = "#2ca02c", "Age 50+" = "#d62728")) +
-    scale_shape_manual(values = c("Age <50" = 16, "Age 50+" = 17)) +
+    scale_color_manual(values = c("Age 50+" = "#1f77b4", "Age <50" = "#ff7f0e")) +
+    scale_shape_manual(values = c("Age 50+" = 16, "Age <50" = 17)) +
     theme_minimal(base_size = 13) +
     labs(
       title = "Age Stratification",
-      y = "Risk Ratio (95% CI) for Death per 10-unit Increase",
+      y = "Risk Ratio (95% CI) for Death",
       x = "Pollutant",
       color = "Age Group",
       shape = "Age Group"
@@ -492,13 +560,10 @@ plot_age
     plot_layout(guides = "collect") +
     plot_annotation(
       title = "Risk Ratios by Stratification for All Pollutants",
-      subtitle = "Per 10-unit increase in pollutant concentration",
       theme = theme(plot.title = element_text(size = 14, face = "bold"),
                     plot.subtitle = element_text(size = 12))
     )
   
   combined_subgroup_plot
-
-
 
 
